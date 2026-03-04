@@ -24,13 +24,19 @@ SCOPES = [
 
 def connect_to_google_sheets():
     try:
-        key_path = r"C:\Users\91942\Downloads\Logify\service_account.json"
-        with open(key_path, "r", encoding="utf-8") as f:
-            service_account_info = json.load(f)
-        creds = Credentials.from_service_account_info(
-            service_account_info,
-            scopes=SCOPES
-        )
+        if "gcp_service_account" in st.secrets:
+            creds = Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"],
+                scopes=SCOPES
+            )
+        else:
+            key_path = r"C:\Users\91942\Downloads\Logify\service_account.json"
+            with open(key_path, "r", encoding="utf-8") as f:
+                service_account_info = json.load(f)
+            creds = Credentials.from_service_account_info(
+                service_account_info,
+                scopes=SCOPES
+            )
         client = gspread.authorize(creds)
         return client
 
