@@ -11,7 +11,6 @@ import json
 # CONFIGURATION
 # --------------------------------------------------
 
-SHEET_NAME = "Logify - Work Logs"
 HEADERS = ["Date", "Day", "Work Done Today", "Submission Time"]
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -23,6 +22,11 @@ SCOPES = [
 # --------------------------------------------------
 
 def connect_to_google_sheets():
+    """
+    Connects to Google Sheets using credentials.
+    On Streamlit Cloud: uses st.secrets
+    On local machine: reads from service_account.json
+    """
     try:
         if "gcp_service_account" in st.secrets:
             creds = Credentials.from_service_account_info(
@@ -37,6 +41,7 @@ def connect_to_google_sheets():
                 service_account_info,
                 scopes=SCOPES
             )
+
         client = gspread.authorize(creds)
         return client
 
@@ -48,18 +53,39 @@ def connect_to_google_sheets():
         st.stop()
 
 
-def get_or_create_sheet(client):
+def get_user_sheet(client, user_name):
+    """
+    Each user gets their own Google Sheet named: Logify - TheirName
+    If the sheet does not exist, it is created automatically.
+    If headers are missing, they are added.
+
+    This means:
+    - Preksha gets: "Logify - Preksha"
+    - John gets: "Logify - John"
+    - Each person's data is completely private and separate.
+    """
+    # Clean up the name - remove extra spaces, capitalize nicely
+    clean_name = user_name.strip().title()
+
+    # Each user gets their own sheet named after them
+    sheet_name = f"Logify - {clean_name}"
+
     try:
-        spreadsheet = client.open(SHEET_NAME)
+        spreadsheet = client.open(sheet_name)
     except gspread.exceptions.SpreadsheetNotFound:
-        spreadsheet = client.create(SHEET_NAME)
+        # Sheet doesn't exist yet - create it for this user
+        spreadsheet = client.create(sheet_name)
+        # Share it so the user can also view it if they want
         spreadsheet.share(None, perm_type="anyone", role="writer")
 
     sheet = spreadsheet.sheet1
+
+    # Add headers if the sheet is empty
     existing_data = sheet.get_all_values()
     if not existing_data or existing_data[0] != HEADERS:
         sheet.insert_row(HEADERS, index=1)
-    return sheet
+
+    return sheet, clean_name
 
 
 # --------------------------------------------------
@@ -92,6 +118,7 @@ def load_all_logs(sheet):
 # --------------------------------------------------
 
 def already_submitted_today(df):
+    """Check if today's date already has an entry for this user."""
     today = get_today_date()
     if df.empty or "Date" not in df.columns:
         return False
@@ -240,9 +267,52 @@ def main():
     st.caption("Your smart daily work logging system.")
     st.markdown("---")
 
+    # --------------------------------------------------
+    # STEP 1 - Ask for user name
+    # We store the name in session_state so the user
+    # doesn't have to retype it every time they click a button.
+    # --------------------------------------------------
+
+    if "user_name" not in st.session_state:
+        st.session_state.user_name = ""
+
+    if not st.session_state.user_name:
+        st.subheader("👋 Welcome to Logify!")
+        st.write("Please enter your name to get started. Your logs will be saved privately just for you.")
+
+        name_input = st.text_input("Your Name", placeholder="e.g. Preksha")
+
+        if st.button("Continue", type="primary"):
+            if not name_input.strip():
+                st.warning("Please enter your name to continue.")
+            else:
+                st.session_state.user_name = name_input.strip().title()
+                st.rerun()
+        return  # Stop here until name is entered
+
+    # --------------------------------------------------
+    # STEP 2 - Connect to this user's personal Google Sheet
+    # --------------------------------------------------
+
+    user_name = st.session_state.user_name
+
     client = connect_to_google_sheets()
-    sheet = get_or_create_sheet(client)
+    sheet, user_name = get_user_sheet(client, user_name)
     df = load_all_logs(sheet)
+
+    # Show greeting with user's name
+    st.markdown(f"### Hello, {user_name}! 👋")
+
+    # Small button to switch user
+    if st.button("Not you? Switch user"):
+        st.session_state.user_name = ""
+        st.rerun()
+
+    st.markdown("---")
+
+    # --------------------------------------------------
+    # STATS - Streak and monthly count
+    # --------------------------------------------------
 
     streak = calculate_streak(df)
     monthly_count = get_monthly_stats(df)
@@ -273,6 +343,11 @@ def main():
         )
 
     st.markdown("---")
+
+    # --------------------------------------------------
+    # LOG ENTRY FORM
+    # --------------------------------------------------
+
     st.subheader("📝 Today's Log")
 
     today_date = get_today_date()
@@ -294,6 +369,7 @@ def main():
         key="work_input"
     )
 
+    # Polish button
     if st.button("✨ Polish My EOD"):
         if work_done.strip():
             polished = polish_text(work_done)
@@ -304,6 +380,7 @@ def main():
 
     st.markdown(" ")
 
+    # Save button
     if st.button("💾 Save EOD Log", type="primary", use_container_width=True):
         if not work_done.strip():
             st.warning("Please describe what you did today before saving.")
@@ -321,6 +398,8 @@ def main():
                 st.error(f"Failed to save your log: {e}")
 
     st.markdown("---")
+
+    # Recent logs
     st.subheader("🗂️ Recent Logs")
 
     if df.empty:
@@ -330,11 +409,13 @@ def main():
         st.dataframe(recent, use_container_width=True, hide_index=True)
 
     st.markdown("---")
+
+    # Export
     st.subheader("📥 Export Logs")
 
     if not df.empty:
         excel_data = convert_df_to_excel(df)
-        filename = f"logify_logs_{datetime.now().strftime('%Y_%m_%d')}.xlsx"
+        filename = f"logify_{user_name}_{datetime.now().strftime('%Y_%m_%d')}.xlsx"
         st.download_button(
             label="Download All Logs as Excel",
             data=excel_data,
