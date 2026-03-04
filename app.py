@@ -83,13 +83,19 @@ def get_sheet(client):
 # --------------------------------------------------
 
 def get_today_date():
-    return datetime.now().strftime("%d %B %Y")
+    from datetime import timezone, timedelta
+    ist = timezone(timedelta(hours=5, minutes=30))
+    return datetime.now(ist).strftime("%d %B %Y")
 
 def get_today_day():
-    return datetime.now().strftime("%A")
+    from datetime import timezone, timedelta
+    ist = timezone(timedelta(hours=5, minutes=30))
+    return datetime.now(ist).strftime("%A")
 
 def get_submission_time():
-    return datetime.now().strftime("%I:%M %p")
+    from datetime import timezone, timedelta
+    ist = timezone(timedelta(hours=5, minutes=30))
+    return datetime.now(ist).strftime("%I:%M %p")
 
 
 # --------------------------------------------------
