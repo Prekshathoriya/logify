@@ -11,15 +11,14 @@ import json
 # CONFIGURATION
 # --------------------------------------------------
 
-HEADERS = ["Date", "Day", "Work Done Today", "Submission Time"]
+# One single sheet stores everyone's logs.
+# Each row has a Name column so data is filtered per user.
+SHEET_NAME = "Logify - Work Logs"
+HEADERS = ["Name", "Date", "Day", "Work Done Today", "Submission Time"]
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
-
-# This is the Google Drive folder where each user's sheet will be created.
-# All user sheets are stored here so the service account can manage them.
-FOLDER_ID = "1SFw8EbVTP5-liIrCWKgruqbq6nDQxI9g"
 
 # --------------------------------------------------
 # GOOGLE SHEETS CONNECTION
@@ -51,33 +50,32 @@ def connect_to_google_sheets():
         st.stop()
 
 
-def get_user_sheet(client, user_name):
+def get_sheet(client):
     """
-    Each user gets their own Google Sheet stored in the Logify Users folder.
-    - Preksha gets: "Logify - Preksha"
-    - John gets: "Logify - John"
-
-    If the sheet doesn't exist yet, it is created inside the shared folder.
-    The service account has Editor access to that folder, so creation works.
+    Opens the single shared Google Sheet.
+    Everyone's logs go into this one sheet.
+    Each row has the person's Name so we can filter per user.
     """
-    clean_name = user_name.strip().title()
-    sheet_name = f"Logify - {clean_name}"
-
     try:
-        # Try to open existing sheet
-        spreadsheet = client.open(sheet_name)
+        spreadsheet = client.open(SHEET_NAME)
     except gspread.exceptions.SpreadsheetNotFound:
-        # Sheet doesn't exist - create it inside the shared folder
-        spreadsheet = client.create(sheet_name, folder_id=FOLDER_ID)
+        st.error(
+            f"Sheet '{SHEET_NAME}' not found. "
+            "Please create a Google Sheet with this exact name and "
+            "share it with your service account email as Editor."
+        )
+        st.stop()
 
     sheet = spreadsheet.sheet1
 
-    # Add headers if sheet is empty
     existing_data = sheet.get_all_values()
-    if not existing_data or existing_data[0] != HEADERS:
+    if not existing_data:
+        sheet.insert_row(HEADERS, index=1)
+    elif existing_data[0] != HEADERS:
+        sheet.clear()
         sheet.insert_row(HEADERS, index=1)
 
-    return sheet, clean_name
+    return sheet
 
 
 # --------------------------------------------------
@@ -95,37 +93,50 @@ def get_submission_time():
 
 
 # --------------------------------------------------
-# LOAD DATA
+# LOAD DATA FOR THIS USER ONLY
 # --------------------------------------------------
 
-def load_all_logs(sheet):
+def load_user_logs(sheet, user_name):
+    """
+    Loads all rows from the sheet but returns only
+    the rows that belong to this specific user.
+
+    Example:
+        Sheet has rows for Preksha, John, Sara.
+        If user_name is "Preksha", only Preksha's rows are returned.
+    """
     records = sheet.get_all_records()
     if not records:
         return pd.DataFrame(columns=HEADERS)
-    return pd.DataFrame(records)
+
+    df = pd.DataFrame(records)
+
+    # Filter to only this user's rows (case-insensitive match)
+    user_df = df[df["Name"].str.strip().str.lower() == user_name.strip().lower()]
+    return user_df.reset_index(drop=True)
 
 
 # --------------------------------------------------
 # DUPLICATE CHECK
 # --------------------------------------------------
 
-def already_submitted_today(df):
+def already_submitted_today(user_df):
     today = get_today_date()
-    if df.empty or "Date" not in df.columns:
+    if user_df.empty or "Date" not in user_df.columns:
         return False
-    return today in df["Date"].values
+    return today in user_df["Date"].values
 
 
 # --------------------------------------------------
 # STREAK TRACKER
 # --------------------------------------------------
 
-def calculate_streak(df):
-    if df.empty or "Date" not in df.columns:
+def calculate_streak(user_df):
+    if user_df.empty or "Date" not in user_df.columns:
         return 0
 
     logged_dates = set()
-    for date_str in df["Date"]:
+    for date_str in user_df["Date"]:
         try:
             date_obj = datetime.strptime(date_str, "%d %B %Y").date()
             logged_dates.add(date_obj)
@@ -147,13 +158,13 @@ def calculate_streak(df):
 # MONTHLY STATS
 # --------------------------------------------------
 
-def get_monthly_stats(df):
-    if df.empty or "Date" not in df.columns:
+def get_monthly_stats(user_df):
+    if user_df.empty or "Date" not in user_df.columns:
         return 0
 
     current_month = datetime.now().strftime("%B %Y")
     count = 0
-    for date_str in df["Date"]:
+    for date_str in user_df["Date"]:
         try:
             date_obj = datetime.strptime(date_str, "%d %B %Y")
             if date_obj.strftime("%B %Y") == current_month:
@@ -260,7 +271,7 @@ def main():
 
     # --------------------------------------------------
     # STEP 1 - Ask for name
-    # Stored in session_state so it persists across button clicks
+    # Stored in session_state so it persists when buttons are clicked
     # --------------------------------------------------
 
     if "user_name" not in st.session_state:
@@ -281,14 +292,14 @@ def main():
         return
 
     # --------------------------------------------------
-    # STEP 2 - Load this user's personal sheet
+    # STEP 2 - Connect and load this user's data
     # --------------------------------------------------
 
     user_name = st.session_state.user_name
 
     client = connect_to_google_sheets()
-    sheet, user_name = get_user_sheet(client, user_name)
-    df = load_all_logs(sheet)
+    sheet = get_sheet(client)
+    user_df = load_user_logs(sheet, user_name)
 
     st.markdown(f"### Hello, {user_name}! 👋")
 
@@ -302,8 +313,8 @@ def main():
     # STATS
     # --------------------------------------------------
 
-    streak = calculate_streak(df)
-    monthly_count = get_monthly_stats(df)
+    streak = calculate_streak(user_df)
+    monthly_count = get_monthly_stats(user_df)
     current_month = datetime.now().strftime("%B %Y")
 
     if streak > 0:
@@ -324,7 +335,7 @@ def main():
             unsafe_allow_html=True
         )
     with col2:
-        total_logs = len(df)
+        total_logs = len(user_df)
         st.markdown(
             f'<div class="stat-box"><strong>{total_logs}</strong><br/>Total entries all time</div>',
             unsafe_allow_html=True
@@ -370,16 +381,17 @@ def main():
     if st.button("💾 Save EOD Log", type="primary", use_container_width=True):
         if not work_done.strip():
             st.warning("Please describe what you did today before saving.")
-        elif already_submitted_today(df):
+        elif already_submitted_today(user_df):
             st.warning("EOD already submitted for today. See you tomorrow!")
         else:
             submission_time = get_submission_time()
-            new_row = [today_date, today_day, work_done.strip(), submission_time]
+            # Save name along with the log entry
+            new_row = [user_name, today_date, today_day, work_done.strip(), submission_time]
             try:
                 sheet.append_row(new_row)
                 st.success(f"EOD saved successfully at {submission_time}!")
                 st.balloons()
-                df = load_all_logs(sheet)
+                user_df = load_user_logs(sheet, user_name)
             except Exception as e:
                 st.error(f"Failed to save your log: {e}")
 
@@ -391,10 +403,12 @@ def main():
 
     st.subheader("🗂️ Recent Logs")
 
-    if df.empty:
+    if user_df.empty:
         st.info("No logs yet. Submit your first EOD above to get started!")
     else:
-        recent = df.tail(5).iloc[::-1].reset_index(drop=True)
+        # Show last 5 entries, newest first, hide the Name column
+        display_df = user_df.drop(columns=["Name"], errors="ignore")
+        recent = display_df.tail(5).iloc[::-1].reset_index(drop=True)
         st.dataframe(recent, use_container_width=True, hide_index=True)
 
     st.markdown("---")
@@ -405,8 +419,9 @@ def main():
 
     st.subheader("📥 Export Logs")
 
-    if not df.empty:
-        excel_data = convert_df_to_excel(df)
+    if not user_df.empty:
+        export_df = user_df.drop(columns=["Name"], errors="ignore")
+        excel_data = convert_df_to_excel(export_df)
         filename = f"logify_{user_name}_{datetime.now().strftime('%Y_%m_%d')}.xlsx"
         st.download_button(
             label="Download All Logs as Excel",
@@ -415,7 +430,7 @@ def main():
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
-        st.caption(f"{len(df)} total entries will be included in the export.")
+        st.caption(f"{len(user_df)} total entries will be included in the export.")
     else:
         st.info("Nothing to export yet. Add some logs first!")
 
