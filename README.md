@@ -1,197 +1,158 @@
-# 📋 Logify – Smart Daily Work Logging System
+# Logify - Smart Daily Work Logging System
 
-Logify is a simple, personal EOD (End of Day) logging tool built with **Streamlit** and **Google Sheets**.
+Logify is a simple, multi-user EOD (End of Day) logging tool built with Streamlit and Google Sheets.
 
-Every day you write what you worked on, hit Save, and your entry is stored permanently in a Google Sheet — forever, for free. No database setup, no backend, no complexity.
+Every day you enter your name, write what you worked on, and hit Save. Your entry is stored permanently in a Google Sheet. Each user sees only their own logs, streak, and stats.
 
----
-
-## ✨ Features
-
-| Feature | Description |
-|---|---|
-| 📅 Auto Date & Day | No typing needed — date and day are filled automatically |
-| 🔒 One Entry Per Day | Duplicate entries are blocked automatically |
-| 🔥 Streak Tracker | See how many consecutive days you've logged |
-| 📊 Monthly Counter | Track how many days you logged this month |
-| ✨ Polish My EOD | Improves your text to sound more professional |
-| 📥 Export to Excel | Download all your logs as a .xlsx file |
+Live App: https://logify-rd2yvxupcn4ykvwb8wsgjk.streamlit.app
+GitHub: https://github.com/Prekshathoriya/logify
 
 ---
 
-## 🗂️ Project Structure
+## Features
+
+- Multi-user support - each person enters their name and gets their own private view
+- Auto date and day detection - no typing needed
+- One entry per day - duplicate entries are blocked automatically
+- Streak tracker - counts how many consecutive days you have logged
+- Monthly counter - tracks how many days you logged this month
+- Polish My EOD - improves your text to sound more professional
+- Export to Excel - download all your logs as a .xlsx file
+- IST timezone - all times are recorded in Indian Standard Time
+
+---
+
+## Project Structure
 
 ```
 logify/
-├── app.py                 ← Main Streamlit app (all logic lives here)
-├── requirements.txt       ← Python packages needed
-├── README.md              ← This file
-└── service_account.json   ← Your Google API credentials (DO NOT share this)
+├── app.py                 - Main Streamlit app
+├── requirements.txt       - Python packages needed
+├── README.md              - This file
+└── service_account.json   - Google API credentials (DO NOT share or upload to GitHub)
 ```
 
 ---
 
-## 🚀 Setup Guide (Step by Step)
+## How Multi-User Works
 
-### Step 1 – Install Python packages
+All users' logs are stored in one single Google Sheet called "Logify - Work Logs".
 
-Make sure you have Python 3.9+ installed. Then run:
+Each row has a Name column:
+
+| Name    | Date        | Day      | Work Done Today | Submission Time |
+|---------|-------------|----------|-----------------|-----------------|
+| Preksha | 05 Mar 2026 | Thursday | Completed...    | 06:30 PM        |
+| Mentor  | 05 Mar 2026 | Thursday | Reviewed...     | 07:00 PM        |
+| John    | 05 Mar 2026 | Thursday | Fixed bug...    | 08:00 PM        |
+
+When a user opens the app and enters their name, they only see their own rows. The streak, stats, and export are all filtered per user.
+
+The sheet owner (you) can open the Google Sheet and see everyone's entries in one place - great for mentors tracking their students.
+
+---
+
+## Setup Guide
+
+### Step 1 - Install Python packages
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
-
-### Step 2 – Set up Google Sheets API
-
-This is the most important step. Follow carefully.
+### Step 2 - Set up Google Sheets API
 
 #### 2a. Create a Google Cloud Project
+1. Go to https://console.cloud.google.com
+2. Click New Project, give it a name, click Create
 
-1. Go to [https://console.cloud.google.com](https://console.cloud.google.com)
-2. Click **"New Project"** → give it any name (e.g. `logify-project`) → Click **Create**
-3. Make sure your new project is selected in the top dropdown
-
-#### 2b. Enable the APIs
-
-1. In the left sidebar, go to **APIs & Services → Library**
-2. Search for **"Google Sheets API"** → Click it → Click **Enable**
-3. Go back to Library, search for **"Google Drive API"** → Click it → Click **Enable**
+#### 2b. Enable APIs
+1. Go to APIs and Services - Library
+2. Search and enable Google Sheets API
+3. Search and enable Google Drive API
 
 #### 2c. Create a Service Account
-
-> A service account is like a robot Google account that your app uses to read/write the sheet.
-
-1. Go to **APIs & Services → Credentials**
-2. Click **"+ Create Credentials"** → Choose **"Service Account"**
-3. Give it a name like `logify-bot` → Click **Create and Continue**
-4. Skip the optional steps → Click **Done**
+1. Go to APIs and Services - Credentials
+2. Click Create Credentials - Service Account
+3. Give it a name like logify-bot - click Create and Continue
+4. Skip optional steps - click Done
 
 #### 2d. Download the JSON Key
+1. Click on your service account
+2. Go to the Keys tab
+3. Click Add Key - Create New Key - JSON - Create
+4. Rename the downloaded file to service_account.json
+5. Move it into your logify folder
 
-1. Click on the service account you just created
-2. Go to the **"Keys"** tab
-3. Click **"Add Key"** → **"Create New Key"** → Choose **JSON** → Click **Create**
-4. A file will download automatically — this is your `service_account.json`
-5. **Move this file into your `logify/` project folder**
+#### 2e. Create and Share the Google Sheet
+1. Go to https://sheets.google.com
+2. Create a new blank sheet
+3. Rename it to exactly: Logify - Work Logs
+4. Click Share - paste your service account email - set role to Editor - click Share
 
-> ⚠️ NEVER share this file or upload it to GitHub. Add it to `.gitignore`.
-
-#### 2e. Share your Google Sheet with the service account
-
-1. Open `service_account.json` in a text editor
-2. Find the `"client_email"` field — it looks like: `logify-bot@your-project.iam.gserviceaccount.com`
-3. Go to [Google Sheets](https://sheets.google.com) and create a new blank sheet named exactly:
-   ```
-   Logify - Work Logs
-   ```
-4. Click **Share** (top right) → paste the `client_email` → give it **Editor** access → Click **Send**
-
-> 💡 Alternatively, the app will auto-create the sheet the first time it runs — but sharing manually ensures no permission issues.
-
----
-
-### Step 3 – Run Locally
+### Step 3 - Run Locally
 
 ```bash
 streamlit run app.py
 ```
 
-The app will open in your browser at `http://localhost:8501`
+App opens at http://localhost:8501
 
 ---
 
-## ☁️ Deploy on Streamlit Community Cloud (Free)
+## Deploy on Streamlit Cloud (Free)
 
-Streamlit Cloud lets you host your app for free at a public URL.
+### Step 1 - Push to GitHub
+Push your project to a GitHub repository. Do NOT include service_account.json in the repo.
 
-### Step 1 – Push your code to GitHub
-
-Create a new GitHub repository. Push your project files:
-
-```
-app.py
-requirements.txt
-README.md
-```
-
-> ⚠️ DO NOT push `service_account.json` to GitHub. Add it to `.gitignore`.
-
-### Step 2 – Add secrets on Streamlit Cloud
-
-Since you can't upload `service_account.json` to GitHub, you'll store the credentials as **Streamlit Secrets**.
-
-1. Go to [https://share.streamlit.io](https://share.streamlit.io) and log in with GitHub
-2. Click **"New App"** → select your repo and branch → set main file to `app.py`
-3. Before deploying, click **"Advanced settings"** → go to the **Secrets** tab
-4. Open your `service_account.json` file and paste its contents in this format:
+### Step 2 - Add Secrets on Streamlit Cloud
+1. Go to https://share.streamlit.io
+2. Click New App - select your repo - set main file to app.py
+3. Click Advanced Settings - Secrets tab
+4. Paste your credentials in TOML format:
 
 ```toml
 [gcp_service_account]
 type = "service_account"
 project_id = "your-project-id"
-private_key_id = "abc123..."
-private_key = "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----\n"
-client_email = "logify-bot@your-project.iam.gserviceaccount.com"
-client_id = "123456789"
+private_key_id = "your-private-key-id"
+private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+client_email = "your-service-account@your-project.iam.gserviceaccount.com"
+client_id = "your-client-id"
 auth_uri = "https://accounts.google.com/o/oauth2/auth"
 token_uri = "https://oauth2.googleapis.com/token"
 auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
+client_x509_cert_url = "your-client-x509-cert-url"
+universe_domain = "googleapis.com"
 ```
 
-> 💡 Copy each field from `service_account.json` and paste them here in TOML format.
-
-5. Click **Deploy** — your app will be live in ~1 minute!
+### Step 3 - Deploy
+Click Deploy. Your app will be live in about 2 minutes.
 
 ---
 
-## 🧠 How Key Features Work
+## Important Notes
 
-### 🔥 Streak Logic
-
-The streak counter walks backwards through dates:
-
-```
-Today = March 4
-Check March 4 → has entry? ✅ streak = 1
-Check March 3 → has entry? ✅ streak = 2
-Check March 2 → has entry? ✅ streak = 3
-Check March 1 → has entry? ❌ STOP
-→ Final streak = 3
-```
-
-If you miss a day, the streak resets to 0 (or whatever your current consecutive run is).
-
-### 🔌 Google Sheets Connection
-
-```
-Your App → service_account.json credentials
-         → Google authenticates the service account
-         → App gets read/write access to your sheet
-         → gspread library handles all the API calls
-```
-
-No passwords, no OAuth popups — it all happens in the background automatically.
+- Never upload service_account.json to GitHub
+- The .gitignore file already excludes it
+- All times are recorded in IST (Indian Standard Time)
+- The Google Sheet must be named exactly: Logify - Work Logs
+- The service account email must have Editor access to the sheet
 
 ---
 
-## 🛑 .gitignore (Important!)
+## Tech Stack
 
-Create a `.gitignore` file in your project folder with this content:
-
-```
-service_account.json
-__pycache__/
-*.pyc
-.env
-```
-
-This prevents your secret credentials from being accidentally pushed to GitHub.
+- Frontend: Streamlit
+- Database: Google Sheets
+- Language: Python
+- Deployment: Streamlit Community Cloud (free)
+- Libraries: gspread, google-auth, pandas, openpyxl
 
 ---
 
-## 📄 License
+## Built By
 
-Free to use for personal and portfolio projects.
+Preksha Thoriya
+GitHub: https://github.com/Prekshathoriya
+Project: https://github.com/Prekshathoriya/logify
