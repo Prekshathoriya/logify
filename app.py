@@ -17,16 +17,15 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+# This is the Google Drive folder where each user's sheet will be created.
+# All user sheets are stored here so the service account can manage them.
+FOLDER_ID = "1SFw8EbVTP5-liIrCWKgruqbq6nDQxI9g"
+
 # --------------------------------------------------
 # GOOGLE SHEETS CONNECTION
 # --------------------------------------------------
 
 def connect_to_google_sheets():
-    """
-    Connects to Google Sheets using credentials.
-    On Streamlit Cloud: uses st.secrets
-    On local machine: reads from service_account.json
-    """
     try:
         if "gcp_service_account" in st.secrets:
             creds = Credentials.from_service_account_info(
@@ -41,7 +40,6 @@ def connect_to_google_sheets():
                 service_account_info,
                 scopes=SCOPES
             )
-
         client = gspread.authorize(creds)
         return client
 
@@ -55,32 +53,26 @@ def connect_to_google_sheets():
 
 def get_user_sheet(client, user_name):
     """
-    Each user gets their own Google Sheet named: Logify - TheirName
-    If the sheet does not exist, it is created automatically.
-    If headers are missing, they are added.
-
-    This means:
+    Each user gets their own Google Sheet stored in the Logify Users folder.
     - Preksha gets: "Logify - Preksha"
     - John gets: "Logify - John"
-    - Each person's data is completely private and separate.
-    """
-    # Clean up the name - remove extra spaces, capitalize nicely
-    clean_name = user_name.strip().title()
 
-    # Each user gets their own sheet named after them
+    If the sheet doesn't exist yet, it is created inside the shared folder.
+    The service account has Editor access to that folder, so creation works.
+    """
+    clean_name = user_name.strip().title()
     sheet_name = f"Logify - {clean_name}"
 
     try:
+        # Try to open existing sheet
         spreadsheet = client.open(sheet_name)
     except gspread.exceptions.SpreadsheetNotFound:
-        # Sheet doesn't exist yet - create it for this user
-        spreadsheet = client.create(sheet_name)
-        # Share it so the user can also view it if they want
-        spreadsheet.share(None, perm_type="anyone", role="writer")
+        # Sheet doesn't exist - create it inside the shared folder
+        spreadsheet = client.create(sheet_name, folder_id=FOLDER_ID)
 
     sheet = spreadsheet.sheet1
 
-    # Add headers if the sheet is empty
+    # Add headers if sheet is empty
     existing_data = sheet.get_all_values()
     if not existing_data or existing_data[0] != HEADERS:
         sheet.insert_row(HEADERS, index=1)
@@ -118,7 +110,6 @@ def load_all_logs(sheet):
 # --------------------------------------------------
 
 def already_submitted_today(df):
-    """Check if today's date already has an entry for this user."""
     today = get_today_date()
     if df.empty or "Date" not in df.columns:
         return False
@@ -268,9 +259,8 @@ def main():
     st.markdown("---")
 
     # --------------------------------------------------
-    # STEP 1 - Ask for user name
-    # We store the name in session_state so the user
-    # doesn't have to retype it every time they click a button.
+    # STEP 1 - Ask for name
+    # Stored in session_state so it persists across button clicks
     # --------------------------------------------------
 
     if "user_name" not in st.session_state:
@@ -278,7 +268,7 @@ def main():
 
     if not st.session_state.user_name:
         st.subheader("👋 Welcome to Logify!")
-        st.write("Please enter your name to get started. Your logs will be saved privately just for you.")
+        st.write("Enter your name to get started. Your logs will be saved privately just for you.")
 
         name_input = st.text_input("Your Name", placeholder="e.g. Preksha")
 
@@ -288,10 +278,10 @@ def main():
             else:
                 st.session_state.user_name = name_input.strip().title()
                 st.rerun()
-        return  # Stop here until name is entered
+        return
 
     # --------------------------------------------------
-    # STEP 2 - Connect to this user's personal Google Sheet
+    # STEP 2 - Load this user's personal sheet
     # --------------------------------------------------
 
     user_name = st.session_state.user_name
@@ -300,10 +290,8 @@ def main():
     sheet, user_name = get_user_sheet(client, user_name)
     df = load_all_logs(sheet)
 
-    # Show greeting with user's name
     st.markdown(f"### Hello, {user_name}! 👋")
 
-    # Small button to switch user
     if st.button("Not you? Switch user"):
         st.session_state.user_name = ""
         st.rerun()
@@ -311,7 +299,7 @@ def main():
     st.markdown("---")
 
     # --------------------------------------------------
-    # STATS - Streak and monthly count
+    # STATS
     # --------------------------------------------------
 
     streak = calculate_streak(df)
@@ -345,7 +333,7 @@ def main():
     st.markdown("---")
 
     # --------------------------------------------------
-    # LOG ENTRY FORM
+    # LOG ENTRY
     # --------------------------------------------------
 
     st.subheader("📝 Today's Log")
@@ -369,7 +357,6 @@ def main():
         key="work_input"
     )
 
-    # Polish button
     if st.button("✨ Polish My EOD"):
         if work_done.strip():
             polished = polish_text(work_done)
@@ -380,7 +367,6 @@ def main():
 
     st.markdown(" ")
 
-    # Save button
     if st.button("💾 Save EOD Log", type="primary", use_container_width=True):
         if not work_done.strip():
             st.warning("Please describe what you did today before saving.")
@@ -399,7 +385,10 @@ def main():
 
     st.markdown("---")
 
-    # Recent logs
+    # --------------------------------------------------
+    # RECENT LOGS
+    # --------------------------------------------------
+
     st.subheader("🗂️ Recent Logs")
 
     if df.empty:
@@ -410,7 +399,10 @@ def main():
 
     st.markdown("---")
 
-    # Export
+    # --------------------------------------------------
+    # EXPORT
+    # --------------------------------------------------
+
     st.subheader("📥 Export Logs")
 
     if not df.empty:
